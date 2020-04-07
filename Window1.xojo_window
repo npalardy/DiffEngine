@@ -250,6 +250,39 @@ Begin Window Window1
       Visible         =   True
       Width           =   456
    End
+   Begin CheckBox chkDiffFormat
+      AutoDeactivate  =   True
+      Bold            =   False
+      Caption         =   "Unix Diff Format"
+      DataField       =   ""
+      DataSource      =   ""
+      Enabled         =   True
+      Height          =   20
+      HelpTag         =   ""
+      Index           =   -2147483648
+      InitialParent   =   ""
+      Italic          =   False
+      Left            =   116
+      LockBottom      =   False
+      LockedInPosition=   False
+      LockLeft        =   True
+      LockRight       =   False
+      LockTop         =   True
+      Scope           =   2
+      State           =   0
+      TabIndex        =   5
+      TabPanelIndex   =   0
+      TabStop         =   True
+      TextFont        =   "System"
+      TextSize        =   0.0
+      TextUnit        =   0
+      Top             =   0
+      Transparent     =   False
+      Underline       =   False
+      Value           =   False
+      Visible         =   True
+      Width           =   198
+   End
 End
 #tag EndWindow
 
@@ -263,7 +296,205 @@ End
 
 
 	#tag Method, Flags = &h21
+		Private Sub OpenContentsOfFileIntoMe(instance as textarea, f as FolderItem)
+		  
+		  Dim tis As textinputstream = TextInputStream.Open( f )
+		  
+		  instance.Text = tis.ReadAll
+		  
+		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h21
+		Private Sub PutDiffResultsInTextArea(result as string)
+		  Const kOperationChange = "c"
+		  Const kOperationAdd = "a"
+		  Const kOperationDelete = "d"
+		  
+		  #Pragma BackgroundTasks False
+		  #Pragma NilObjectChecking False
+		  #Pragma BoundsChecking False
+		  #Pragma StackOverflowChecking False
+		  
+		  #If TargetMacOS
+		    Declare Function documentView Lib "AppKit" Selector "documentView" ( obj As Integer ) As Integer
+		    Declare Function textStorage Lib "AppKit" Selector "textStorage" ( obj As Integer ) As Integer
+		    Declare Sub beginEditing Lib "AppKit" Selector "beginEditing" ( obj As Integer )
+		    Declare Sub endEditing Lib "AppKit" Selector "endEditing" ( obj As Integer )
+		    
+		    Dim docView As Integer
+		    docView = documentView(results.Handle)
+		    
+		    Dim storage As Integer
+		    storage = textStorage(docView)
+		    
+		    beginEditing(storage)
+		    
+		  #EndIf
+		  
+		  Dim resultLines() As String = result.Split("*")
+		  
+		  Dim leftIndex As Integer
+		  Dim rightIndex As Integer
+		  
+		  Dim leftLines() As String = Split( ReplaceLineEndings(leftText.Text, EndOfLine), EndOfLine )
+		  Dim rightLines() As String = Split( ReplaceLineEndings(rightText.Text, EndOfLine), EndOfLine )
+		  
+		  For Each line As String In resultLines
+		    
+		    If line.Trim = "" Then
+		      Continue
+		    End If
+		    
+		    results.AppendText line + EndOfLine
+		    
+		    // deleted in left, inserted in right , starting from in left, starting from in right
+		    Dim values() As String = line.Split(".")
+		    
+		    Dim deletedInLeft As Integer = Val(values(0))
+		    Dim insertedInRight As Integer = Val(values(1))
+		    Dim startingFromInLeft As Integer = Val(values(2))
+		    Dim startingFromInRight As Integer = Val(values(3))
+		    
+		    
+		    // change type ?
+		    Dim changeType As String
+		    
+		    // a change is item both change (delete + add)
+		    // add - only right
+		    // delete - only left
+		    If deletedInLeft = 0 And insertedInRight <> 0 Then
+		      changeType = kOperationAdd
+		      Dim addedLine As String 
+		      
+		      addedLine = addedLine + Str(startingFromInLeft) 
+		      addedLine = addedLine + changeType 
+		      addedLine = addedLine + Str(startingFromInRight + 1) 
+		      If insertedInRight > 1 Then
+		        addedLine = addedLine + "," + Str(startingFromInLeft + insertedInRight) 
+		      End If
+		      
+		      merged.appendtext addedLine + EndOfLine
+		      
+		    Elseif deletedInLeft <> 0 And insertedInRight = 0 Then
+		      changeType = kOperationDelete
+		      
+		      Dim addedLine As String 
+		      
+		      addedLine = addedLine + Str(startingFromInLeft+1) 
+		      If deletedInLeft > 1 Then
+		        addedLine = addedLine + "," + Str(startingFromInLeft + deletedInLeft) 
+		      End If
+		      addedLine = addedLine + changeType 
+		      addedLine = addedLine + Str(startingFromInRight)
+		      
+		      merged.appendtext addedLine + EndOfLine
+		      
+		    Else
+		      changeType = kOperationChange 
+		      
+		      Dim addedLine As String 
+		      
+		      addedLine = addedLine + Str(startingFromInLeft+1) 
+		      If deletedinleft > 1 Then
+		        addedLine = addedLine + "," + Str(startingFromInLeft + deletedInLeft) 
+		      End If
+		      addedLine = addedLine + changeType 
+		      addedLine = addedLine + Str(startingFromInRight+1)
+		      If insertedInRight > 1 Then
+		        addedLine = addedLine +  "," + Str(startingFromInRight + insertedInRight) 
+		      End If
+		      
+		      merged.appendtext addedLine + EndOfLine
+		      
+		    End If
+		    
+		    If startingFromInLeft <> leftIndex Then
+		      For i As Integer = leftIndex To startingFromInLeft-1
+		        // // unchanged
+		        // Dim addedLine As String = "  " + leftLines(i) + EndOfLine
+		        // // merged.appendtext addedLine
+		        // Dim s As New StyleRun
+		        // s.Text = addedLine
+		        // s.TextColor = REALbasic.TextColor
+		        // merged.StyledText.AppendStyleRun s
+		        // 
+		         leftIndex = leftIndex + 1
+		      Next
+		    End If
+		    
+		    For i As Integer = startingFromInLeft To startingFromInLeft + deletedInLeft - 1
+		      // deleted in left
+		      Dim addedLine As String = "< " + leftLines(i) + EndOfLine
+		      merged.appendtext addedLine
+		      // Dim s As New StyleRun
+		      // s.Text = addedLine
+		      // If IsDarkMode Then
+		      // s.TextColor = &cFC8D0D00
+		      // Else
+		      // s.TextColor = &cFF0000
+		      // End If
+		      // merged.StyledText.AppendStyleRun s
+		      // 
+		      leftindex = leftIndex + 1
+		    Next
+		    
+		    Dim needsSeparator As Boolean = changeType = kOperationChange 
+		    
+		    If needsSeparator Then
+		      Dim addedLine As String = "---" + EndOfLine
+		      merged.appendtext addedLine
+		    End If
+		    
+		    For i As Integer = startingFromInRight To startingFromInRight + insertedInRight - 1
+		      Dim addedLine As String = "> " + rightLines(i) + EndOfLine
+		      merged.appendtext addedLine
+		      // Dim s As New StyleRun
+		      // s.Text = addedLine
+		      // If IsDarkMode Then
+		      // s.TextColor = &c3D88F300
+		      // Else
+		      // s.TextColor = &c0000ff
+		      // End If
+		      // merged.StyledText.AppendStyleRun s
+		      
+		      rightIndex = rightIndex + 1
+		    Next
+		    
+		    
+		  Next
+		  
+		  For i As Integer = leftIndex To leftLines.Ubound
+		    // unchanged
+		    // Dim addedLine As String = "  " + leftLines(i) + EndOfLine
+		    // // merged.appendtext 
+		    // Dim s As New StyleRun
+		    // s.Text = addedLine
+		    // s.TextColor = REALbasic.TextColor
+		    // merged.StyledText.AppendStyleRun s
+		    // 
+		    leftIndex = leftIndex + 1
+		  Next
+		  
+		  
+		  #If TargetMacOS
+		    endEditing(storage)
+		  #EndIf
+		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h21
 		Private Sub PutResultsInTextArea(result as string)
+		  If chkDiffFormat.State = CheckBox.CheckedStates.Checked Then
+		    PutDiffResultsInTextArea( result )
+		  Else
+		    PutStyledResultsInTextArea( result )
+		  End If
+		End Sub
+	#tag EndMethod
+
+	#tag Method, Flags = &h21
+		Private Sub PutStyledResultsInTextArea(result as string)
 		  #Pragma BackgroundTasks False
 		  #Pragma NilObjectChecking False
 		  #Pragma BoundsChecking False
@@ -379,6 +610,38 @@ End
 
 #tag EndWindowCode
 
+#tag Events leftText
+	#tag Event
+		Sub Open()
+		  Me.AcceptFileDrop "Text"
+		  
+		End Sub
+	#tag EndEvent
+	#tag Event
+		Sub DropObject(obj As DragItem, action As Integer)
+		  
+		  If obj.FolderItemAvailable Then
+		    OpenContentsOfFileIntoMe( Me, obj.FolderItem )
+		  End If
+		End Sub
+	#tag EndEvent
+#tag EndEvents
+#tag Events rightText
+	#tag Event
+		Sub Open()
+		  Me.AcceptFileDrop "Text"
+		  
+		End Sub
+	#tag EndEvent
+	#tag Event
+		Sub DropObject(obj As DragItem, action As Integer)
+		  
+		  If obj.FolderItemAvailable Then
+		    OpenContentsOfFileIntoMe( Me, obj.FolderItem )
+		  End If
+		End Sub
+	#tag EndEvent
+#tag EndEvents
 #tag Events PushButton1
 	#tag Event
 		Sub Action()

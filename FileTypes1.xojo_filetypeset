@@ -1,0 +1,16 @@
+#tag FileTypeSet
+	#tag FileType
+		CodeName=Text
+		Extension=.asc;.ascii;.bas;.c;.class;.cp;.cpp;.h;.hp;.hpp;.i3;.java;.m2;.m3;.mak;.text;.txt
+		Flags=&h3
+		MacCreator=????
+		MacType=TEXT
+		Name=text/plain
+		UTI=public.text
+		UTIConformsTo=public.data, public.content
+		Description=
+		MimeType=
+		Imported=True
+	#tag EndFileType
+
+#tag EndFileTypeSet
