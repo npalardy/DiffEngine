@@ -382,6 +382,7 @@ End
 #tag Events PushButton1
 	#tag Event
 		Sub Action()
+		  merged.Text = ""
 		  results.Text = ""
 		  
 		  Dim result As String = Diff.DiffText(lefttext.Text, rightText.Text, False, False, False)
